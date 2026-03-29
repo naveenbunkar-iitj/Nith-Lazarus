@@ -160,12 +160,15 @@ def parse_hex_or_num(raw: object) -> float:
 def normalize_patient_id(raw: object) -> str | None:
     if pd.isna(raw):
         return None
+
     text = str(raw).strip()
     if not text:
         return None
-    parsed = parse_id(text)
-    if not pd.isna(parsed):
-        return str(int(parsed))
+
+    numeric = pd.to_numeric(text, errors="coerce")
+    if not pd.isna(numeric) and float(numeric).is_integer():
+        return str(int(numeric))
+
     return text
 
 
