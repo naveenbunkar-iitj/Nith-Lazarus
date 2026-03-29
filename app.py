@@ -127,7 +127,11 @@ def decrypt_med(scrambled: str, age: float | int | None) -> str:
     if age is None or pd.isna(age):
         shift = -13
     else:
-        shift = -(int(float(age)) % 26)
+        age_num = pd.to_numeric(age, errors="coerce")
+        if pd.isna(age_num):
+            shift = -13
+        else:
+            shift = -(int(age_num) % 26)
     return caesar_shift(text, shift)
 
 
@@ -151,6 +155,21 @@ def parse_hex_or_num(raw: object) -> float:
         return float(s)
     except ValueError:
         return np.nan
+
+
+def normalize_patient_id(raw: object) -> str | None:
+    if pd.isna(raw):
+        return None
+
+    text = str(raw).strip()
+    if not text:
+        return None
+
+    numeric = pd.to_numeric(text, errors="coerce")
+    if not pd.isna(numeric) and float(numeric).is_integer():
+        return str(int(numeric))
+
+    return text
 
 
 def prepare_identity_cards(df_demo: pd.DataFrame) -> pd.DataFrame:
@@ -231,7 +250,12 @@ def prepare_pharmacy(df_rx: pd.DataFrame, identity: pd.DataFrame) -> pd.DataFram
 
     merged = r[[id_col, med_col]].copy()
     merged.columns = ["patient_id", "scrambled_meds"]
-    merged = merged.merge(identity[["patient_id", "age"]], on="patient_id", how="left")
+    merged["patient_id"] = merged["patient_id"].apply(normalize_patient_id)
+
+    identity_for_merge = identity[["patient_id", "age"]].copy()
+    identity_for_merge["patient_id"] = identity_for_merge["patient_id"].apply(normalize_patient_id)
+
+    merged = merged.merge(identity_for_merge, on="patient_id", how="left")
     merged["decrypted_meds"] = merged.apply(
         lambda row: decrypt_med(row["scrambled_meds"], row["age"]), axis=1
     )
